@@ -54,6 +54,47 @@ function cos_sim_loop(vector1, vector2) {
 
   return dot_product / (magnitude1 * magnitude2);
 }
+/**
+ * @function cos_sim_loop2
+ * @description A potentially faster for-loop based cosine similarity method.
+ * It reduces overhead by:
+ *   - Using a single pre-fetched length variable.
+ *   - Minimizing repeated property lookups.
+ *   - Using local variables inside the loop.
+ *   - Removing unnecessary checks (such as epsilon) and directly returning 0 if magnitude is zero.
+ *
+ * @param {number[]} vector1
+ * @param {number[]} vector2
+ * @returns {number}
+ */
+function cos_sim_loop2(vector1, vector2) {
+  const len = vector1.length;
+  if (len !== vector2.length) {
+    throw new Error('Vectors must have the same length');
+  }
+
+  let dot = 0;
+  let normA = 0;
+  let normB = 0;
+
+  for (let i = 0; i < len; i++) {
+    const a = vector1[i];
+    const b = vector2[i];
+    dot += a * b;
+    normA += a * a;
+    normB += b * b;
+  }
+
+  const magA = Math.sqrt(normA);
+  const magB = Math.sqrt(normB);
+
+  // If either magnitude is zero, similarity is zero
+  if (magA === 0 || magB === 0) {
+    return 0;
+  }
+
+  return dot / (magA * magB);
+}
 
 // Generate test vectors
 function generate_random_vector(size) {
@@ -70,8 +111,10 @@ const NUM_INNER_RUNS = 100000; // Number of computations inside each measurement
 const RUNS = 5; // Number of times we measure performance to compute a stable average
 
 // Generate two random test vectors
-const testVector1 = generate_random_vector(VECTOR_SIZE);
-const testVector2 = generate_random_vector(VECTOR_SIZE);
+const test_vecs = [];
+for(let i = 0; i < 1000; i++){
+  test_vecs.push(generate_random_vector(VECTOR_SIZE));
+}
 
 /**
  * Runs the given cos_sim function NUM_INNER_RUNS times and returns total time in ms.
@@ -79,6 +122,8 @@ const testVector2 = generate_random_vector(VECTOR_SIZE);
  * @returns {number} total time in ms
  */
 function benchmark_cos_sim(fn) {
+  const testVector1 = test_vecs[Math.floor(Math.random() * test_vecs.length)];
+  const testVector2 = test_vecs[Math.floor(Math.random() * test_vecs.length)];
   const start = process.hrtime.bigint();
   let result = 0;
   for (let i = 0; i < NUM_INNER_RUNS; i++) {
@@ -94,24 +139,29 @@ function benchmark_cos_sim(fn) {
 (async () => {
   let reduceTimes = [];
   let loopTimes = [];
+  let loop2Times = [];
 
   for (let i = 0; i < RUNS; i++) {
     const reduceTime = benchmark_cos_sim(cos_sim_reduce);
     const loopTime = benchmark_cos_sim(cos_sim_loop);
+    const loop2Time = benchmark_cos_sim(cos_sim_loop2);
     reduceTimes.push(reduceTime);
     loopTimes.push(loopTime);
+    loop2Times.push(loop2Time);
   }
 
   // Compute averages
   const avgReduce = reduceTimes.reduce((a, b) => a + b, 0) / RUNS;
   const avgLoop = loopTimes.reduce((a, b) => a + b, 0) / RUNS;
+  const avgLoop2 = loop2Times.reduce((a, b) => a + b, 0) / RUNS;
 
   // Print results
   console.log(`Average reduce-based cos_sim execution time (ms): ${avgReduce}`);
   console.log(`Average loop-based cos_sim execution time (ms): ${avgLoop}`);
+  console.log(`Average loop2-based cos_sim execution time (ms): ${avgLoop2}`);
 
   // Determine faster and slower
-  const avgs = { reduce: avgReduce, loop: avgLoop };
+  const avgs = { reduce: avgReduce, loop: avgLoop, loop2: avgLoop2 };
   const faster = Object.entries(avgs).reduce((a,b)=>a[1]<b[1]?a:b)[0];
   const slower = Object.entries(avgs).reduce((a,b)=>a[1]>b[1]?a:b)[0];
 
